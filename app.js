@@ -41,17 +41,7 @@ app.event('app_home_opened', async ({event, say}) => {
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": "*Today's Quote* :hugging_face:\nWe cannot solve problems with the kind of thinking we employed when we came up with them.\nAuthor: `Albert Einstein`\n"
-                        }
-                    },
-                    {
-                        "type": "divider"
-                    },
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": "*Kindly find the selected slots:*"
+                            "text": "*Kindly find today's scheduled slots:*"
                         }
                     },
                     {
@@ -115,7 +105,17 @@ app.event('app_home_opened', async ({event, say}) => {
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": "*<fakelink.ToMoreTimes.com|Select a Slot>*"
+                            "text": "Click here to schedule a time slot."
+                        },
+                        "accessory": {
+                            "type": "button",
+                            "text": {
+                                "type": "plain_text",
+                                "text": "Book New Time Slot",
+                                "emoji": true
+                            },
+                            "value": "book_slot",
+                            "action_id": "book-slot"
                         }
                     }
                 ]
@@ -125,6 +125,34 @@ app.event('app_home_opened', async ({event, say}) => {
         console.error(error);
     }
 });
+
+// Find conversation ID using the conversations.list method
+async function findConversation(name) {
+    try {
+        // Call the conversations.list method using the built-in WebClient
+        const result = await app.client.conversations.list({
+            // The token you used to initialize your app
+            token: "xoxb-your-token"
+        });
+
+        for (const channel of result.channels) {
+            if (channel.name === name) {
+                conversationId = channel.id;
+
+                // Print result
+                console.log("Found conversation ID: " + conversationId);
+                // Break from for loop
+                break;
+            }
+        }
+    }
+    catch (error) {
+        console.error(error);
+    }
+}
+
+// Find conversation with a specified channel `name`
+findConversation("tester-channel");
 
 
 (async () => {
