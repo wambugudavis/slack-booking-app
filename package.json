@@ -10,6 +10,7 @@
   "dependencies": {
     "@slack/bolt": "^3.4.0",
     "@slack/web-api": "^6.7.2",
+    "dayjs": "^1.11.5",
     "dotenv": "^16.0.1",
     "nodemon": "^2.0.19"
   },
