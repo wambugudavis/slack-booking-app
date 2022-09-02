@@ -18,10 +18,19 @@
     }
   },
   {
-    "date": "2022-08-30",
+    "date": "2022-08-31",
     "booking": {
-      "start": 34,
-      "end": 35,
+      "start": 10,
+      "end": 25,
+      "label": "Nurse Orientation",
+      "user": "Peter Gikera"
+    }
+  },
+  {
+    "date": "2022-08-31",
+    "booking": {
+      "start": 30,
+      "end": 34,
       "label": "Tech <> Med Meeting",
       "user": "Peter Gikera"
     }
