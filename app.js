@@ -13,7 +13,8 @@ dayjs.extend(timezone)
 
 dayjs.tz.setDefault("Africa/Nairobi")
 
-const bookings = require('./schedule.json')
+const importedBookings = require('./schedule.json')
+const bookings = [...importedBookings]
 const slots = require('./slots.json')
 
 const app = new App({
@@ -28,7 +29,8 @@ const client = new WebClient(process.env.SLACK_BOT_TOKEN, {
     logLevel: LogLevel.DEBUG
 });
 
-let currentDate = dayjs('2022-08-31').format("YYYY-MM-DD")
+// let currentDate = dayjs('2022-08-31').format("YYYY-MM-DD")
+let currentDate = dayjs().format("YYYY-MM-DD")
 
 const currentBookings = (date) => {
     const all = bookings.filter((booking) => {
@@ -51,7 +53,7 @@ const currentBookings = (date) => {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": `*_${slot.booking.label}_*\n${slot.booking.user}\n>${start} — ${end}`
+                        "text": `*_${slot.booking.label}_*\n<@${slot.booking.user}>\n>${start} — ${end}`
                     },
                     // "accessory": {
                     //     "type": "button",
@@ -72,7 +74,7 @@ const currentBookings = (date) => {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": `*${slot.booking.label}*\n${slot.booking.user}\n>${start} — ${end}`
+                        "text": `*${slot.booking.label}*\n<@${slot.booking.user}>\n>${start} — ${end}`
                     }
                 }, {
                     "type": "divider"
@@ -190,6 +192,7 @@ const homeView = (date) => {
 
     return {
         "type": "home",
+        "callback_id": 'home_view',
         "blocks": [
             {
                 "type": "actions",
@@ -235,13 +238,11 @@ const homeView = (date) => {
     }
 }
 
-const modalView = (user, date) => {
+const modalView = (user, date, selectedStart) => {
     const current = bookings.filter((booking) => {
         return booking.date === date
     })
 
-    // const now = dayjs().format('HHmm')
-    const now = "0130"
     const availableSlots = [...slots]
     let count = 0
     current.forEach((x) => {
@@ -250,11 +251,11 @@ const modalView = (user, date) => {
         availableSlots.splice(start, length)
         count = count + (x.booking.end - x.booking.start)
     })
-    availableSlots.pop()
+    availableSlots.pop() // remove last slot as a start time
 
     const startTimes = availableSlots
         .filter((slot) => {
-            return slot.replace(":", "") > now
+            return dayjs(date + ' ' + slot).isAfter(dayjs())    // future slots only
         })
         .map((slot) => {
             const time = dayjs('1/1/1 ' + slot).format('hh:mm a')
@@ -268,24 +269,78 @@ const modalView = (user, date) => {
             }
         })
 
-    const start = slots.indexOf("09:00")
-    const availableEndTimes = [...startTimes].slice(start, startTimes.length)
-    let endTimes = []
-    console.log(availableEndTimes);
-    for (let i = 0; i < availableEndTimes.length - 1; i++) {
-        const x = dayjs('1/1/1 ' + availableEndTimes[i])
-        const y = dayjs('1/1/1 ' + availableEndTimes[i + 1])
-        console.log(x.format('HHmm'),y.format('HHmm'),y.diff(x, 'minute'))
-        if (y.diff(x, 'minute') === 15) {
-            endTimes.push(availableEndTimes[i + 1])
+    let endTimesPicker;
+    if (selectedStart !== undefined) {
+        // const start = slots.indexOf("09:00")
+        const availableEndTimes = availableSlots
+            .filter((slot) => {
+                return slot.replace(":", "") >= selectedStart.replace(":", "")
+            })
+        // .slice(start, startTimes.length)
+
+        let endTimes = []
+        for (let i = 0; i < availableEndTimes.length - 1; i++) {
+            const x = dayjs('1/1/1 ' + availableEndTimes[i])
+            const y = dayjs('1/1/1 ' + availableEndTimes[i + 1])
+            // console.log(x.format('HHmm'),y.format('HHmm'),y.diff(x, 'minute'))
+            if (y.diff(x, 'minute') === 15) {
+                endTimes.push(availableEndTimes[i + 1])
+            } else {
+                break;
+            }
+        }
+
+        if (endTimes.length === 0) {
+            const last = dayjs('1/1/1 ' + selectedStart).add(15, 'm')
+            endTimes.push(dayjs(last).format('HH:mm'))
         } else {
-            break;
+            const last = dayjs('1/1/1 ' + endTimes[endTimes.length - 1]).add(15, 'm')
+            endTimes.push(dayjs(last).format('HH:mm'))
+        }
+
+        endTimes = endTimes.map((slot) => {
+            const time = dayjs('1/1/1 ' + slot).format('hh:mm a')
+            return {
+                "text": {
+                    "type": "plain_text",
+                    "text": time,
+                    "emoji": true
+                },
+                "value": slot
+            }
+        })
+
+        endTimesPicker = {
+            "block_id": "endTimeBlock",
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*End*"
+            },
+            "accessory": {
+                "type": "static_select",
+                "placeholder": {
+                    "type": "plain_text",
+                    "text": "Choose list",
+                    "emoji": true
+                },
+                "options": endTimes,
+                "action_id": "pick_end_time"
+            }
+        }
+    } else {
+        endTimesPicker = {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": " "
+            }
         }
     }
-    console.log(endTimes);
 
     return {
         "type": "modal",
+        callback_id: 'pick_time_modal',
         "submit": {
             "type": "plain_text",
             "text": "Submit",
@@ -320,6 +375,7 @@ const modalView = (user, date) => {
                 "type": "divider"
             },
             {
+                "block_id": "startTimeBlock",
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
@@ -332,55 +388,17 @@ const modalView = (user, date) => {
                         "text": "Start Time",
                         "emoji": true
                     },
-                    "options": startTimes
+                    "options": startTimes,
+                    "action_id": "pick_start_time"
                 }
             },
+            endTimesPicker,
             {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "*End*"
-                },
-                "accessory": {
-                    "type": "static_select",
-                    "placeholder": {
-                        "type": "plain_text",
-                        "text": "Choose list",
-                        "emoji": true
-                    },
-                    "options": [
-                        {
-                            "text": {
-                                "type": "plain_text",
-                                "text": "My events",
-                                "emoji": true
-                            },
-                            "value": "value-0"
-                        },
-                        {
-                            "text": {
-                                "type": "plain_text",
-                                "text": "All events",
-                                "emoji": true
-                            },
-                            "value": "value-1"
-                        },
-                        {
-                            "text": {
-                                "type": "plain_text",
-                                "text": "Event invites",
-                                "emoji": true
-                            },
-                            "value": "value-1"
-                        }
-                    ]
-                }
-            },
-            {
+                "block_id": "slotDescription",
                 "type": "input",
                 "element": {
                     "type": "plain_text_input",
-                    "action_id": "plain_text_input-action"
+                    "action_id": "slot_description"
                 },
                 "label": {
                     "type": "plain_text",
@@ -407,6 +425,64 @@ app.event('app_home_opened', async ({event, logger}) => {
     }
 });
 
+app.view('pick_time_modal', async ({ack, body, view, client, logger}) => {
+    await ack();
+    const start = view.state.values.startTimeBlock.pick_start_time.selected_option.value;
+    const end = view.state.values.endTimeBlock.pick_end_time.selected_option.value;
+    const label = view.state.values.slotDescription.slot_description.value;
+    const user = body.user.id
+
+    const startIndex = slots.findIndex((slot) => slot === start)
+    const endIndex = slots.findIndex((slot) => slot === end)
+    const booking = {
+        date: currentDate,
+        booking: {start: startIndex, end: endIndex, label, user}
+    }
+    bookings.push(booking)
+    try {
+        const result = await client.views.publish(
+            {
+                user_id: user,
+                view: homeView(currentDate)
+            }
+        );
+
+        const result2 = await client.chat.postMessage({
+            channel: 'C03PNBZP5BM',
+            blocks: [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": `New booking. Storm Room reserved *${dayjs(currentDate).calendar(undefined, {
+                            sameDay: '[today]',
+                            nextDay: '[tomorrow]',
+                            nextWeek: '[on] dddd',
+                            sameElse: '[on] DD/MM/YYYY'
+                        })}*:`
+                    }
+                },
+                {
+                    "type": "divider"
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": `*${label}*\n<@${user}>\n>${dayjs('1/1/1 ' + start).format('hh:mm a')} — ${dayjs('1/1/1 ' + end).format('hh:mm a')}`
+                    }
+                },
+                {
+                    "type": "divider"
+                }
+            ]
+        });
+        // logger.info(result);
+    } catch (error) {
+        // logger.error(error)
+    }
+});
+
 app.action('book_slot_button', async ({ack, logger, body}) => {
     await ack();
     try {
@@ -425,10 +501,27 @@ app.action('book_slot_button', async ({ack, logger, body}) => {
 app.action('datepicker_select', async ({ack, logger, body}) => {
     await ack();
     currentDate = body.view.state.values.datePickerBlock.datepicker_select.selected_date
+    const user = body.user.id
+    try {
+        const result = await client.views.publish(
+            {
+                user_id: user,
+                view: homeView(currentDate)
+            }
+        );
+        // logger.info(result);
+    } catch (error) {
+        // logger.error(error)
+    }
+});
+
+app.action('pick_start_time', async ({ack, logger, body}) => {
+    await ack();
+    const slot = body.view.state.values.startTimeBlock.pick_start_time.selected_option.value
     try {
         const result = await client.views.update(
             {
-                view: homeView(currentDate),
+                view: modalView(body.user, currentDate, slot),
                 view_id: body.view.id
             }
         );
